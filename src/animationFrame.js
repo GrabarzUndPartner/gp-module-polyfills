@@ -9,7 +9,7 @@ var step;
 global.animationFrame = (function (window) {
     var lastTime = 0;
     var requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
-    var cancelAnimationFrame = window.cancelRequestAnimationFrame || window.webkitCancelRequestAnimationFrame || window.mozCancelRequestAnimationFrame;
+    var cancelAnimationFrame =  window.cancelAnimationFrame || window.cancelRequestAnimationFrame || window.webkitCancelRequestAnimationFrame || window.mozCancelRequestAnimationFrame;
 
     // polyfill with setTimeout fallback
     // heavily inspired from @darius gist mod: https://gist.github.com/paulirish/1579671#comment-837945
@@ -34,6 +34,7 @@ global.animationFrame = (function (window) {
 
     // export to window
     window.requestAnimationFrame = requestAnimationFrame;
+    window.cancelAnimationFrame = cancelAnimationFrame;
     window.cancelRequestAnimationFrame = cancelAnimationFrame;
 
     return {
