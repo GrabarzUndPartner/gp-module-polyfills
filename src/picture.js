@@ -1,23 +1,22 @@
 "use strict";
 
-import { getContent } from "./utils";
+import {getContent} from "./utils";
+
+var errors = [];
+
 var validBrowser = !navigator.userAgent.match(/(Google Page Speed Insights)/i);
 var isIE9 = document.documentElement.classList.contains("ie9");
 
-if (!global.HTMLPictureElement) {
+if (!window.HTMLPictureElement) {
     document.createElement("picture");
     document.createElement("source");
 }
 
-global.addEventListener(
-    "resize",
-    function() {
-        render(document.getElementsByTagName("picture"));
-    },
-    false
-);
+window.addEventListener("resize", function() {
+    render(document.getElementsByTagName("picture"));
+}, false);
 
-var devicePixelRatio = global.devicePixelRatio || 1;
+var devicePixelRatio = window.devicePixelRatio || 1;
 var screenMatrix = ["lg", "md", "sm", "xs", "default"];
 
 var init = {
@@ -27,16 +26,18 @@ var init = {
     callbacks: []
 };
 
-global.onload = function() {
+window.onload = function() {
     init.load = true;
     processCallbacks();
 };
 
 if (document.querySelectorAll("picture").length === 0) {
-    global.onload();
+    window.onload();
 }
 
-global.picture = {
+window.picture = {
+    errors: errors,
+
     parse: function(node) {
         if (!node) {
             node = document.body;
@@ -54,8 +55,7 @@ global.picture = {
     update: function(node, sources) {
         node = getNativeNode(node);
         sources.forEach(function(source) {
-            node.querySelectorAll("source." + source.type)[0].srcset =
-                source.srcset;
+            node.querySelectorAll("source." + source.type)[0].srcset = source.srcset;
         });
     },
 
@@ -70,24 +70,17 @@ global.picture = {
     }
 };
 
-export default global.picture;
-
-document.addEventListener(
-    "DOMContentLoaded",
-    function() {
-        var nodes = [].map.call(
-            document.querySelectorAll("picture > img"),
-            function(image) {
-                return image.promise;
-            }
-        );
+document.addEventListener("DOMContentLoaded", function() {
+    var nodes = [].map.call(document.querySelectorAll("picture > img"), function(image) {
+        return image.promise;
+    });
+    setTimeout(function() {
         Promise.all(nodes).then(function() {
             init.ready = true;
             processCallbacks();
         });
-    },
-    false
-);
+    }, 500);
+}, false);
 
 function processCallbacks() {
     if (init.ready && init.load) {
@@ -108,7 +101,7 @@ function getNativeNode(node) {
 
 function registerObserver(images) {
     [].forEach.call(images, function(image) {
-        if (!global.HTMLPictureElement) {
+        if (!window.HTMLPictureElement) {
             image.addEventListener("load", stopPropagation, false);
         }
         image.promise = new Promise(function(resolve, reject) {
@@ -117,19 +110,24 @@ function registerObserver(images) {
                 var svgImage = createSVG(tmpl, image);
                 image.onload = function(e) {
                     updateSVG(svgImage, e.target);
-                    resolve(svgImage);
+                    resolve(image);
                 };
                 if (image.complete) {
                     updateSVG(svgImage, image);
                     resolve(svgImage);
                 }
             } else {
-                image.onload = resolve;
+                image.onload = function() {
+                    resolve(image);
+                };
                 if (image.complete) {
                     resolve(image);
                 }
             }
-            image.onerror = reject;
+            image.onerror = function() {
+                errors.push(image);
+                resolve(image);
+            };
         });
     });
 }
@@ -146,22 +144,19 @@ function updateSVG(svgImage, image) {
     svgImage.setAttribute("xlink:href", image.currentSrc || image.src);
     svgImage.setAttribute("width", image.naturalWidth);
     svgImage.setAttribute("height", image.naturalHeight);
-    svgImage.parentNode.setAttribute(
-        "viewBox",
-        "0 0 " + image.naturalWidth + " " + image.naturalHeight
-    );
+    svgImage.parentNode.setAttribute("viewBox", "0 0 " + image.naturalWidth + " " + image.naturalHeight);
     svgImage.parentNode.setAttribute("width", image.naturalWidth);
     svgImage.parentNode.setAttribute("height", image.naturalHeight);
 }
 
 function render(pictures) {
     if (validBrowser) {
-        if (!global.HTMLPictureElement) {
+        if (!window.HTMLPictureElement) {
             var screenSize = getScreenSize();
         }
         pictures = Array.prototype.slice.call(pictures);
         pictures.forEach(function(picture) {
-            if (!global.HTMLPictureElement) {
+            if (!window.HTMLPictureElement) {
                 if (!picture.modified) {
                     if (isIE9) {
                         removeIE9VideoShim(picture);
@@ -177,19 +172,12 @@ function render(pictures) {
 var size = null;
 function getScreenSize() {
     if (!size) {
-        size =
-            document.body.currentStyle ||
-            global.getComputedStyle(document.body, ":after");
+        size = document.body.currentStyle || window.getComputedStyle(document.body, ":after");
         if (!size.getPropertyValue("content")) {
-            size = global.getComputedStyle(document.body, ":after");
+            size = window.getComputedStyle(document.body, ":after");
         }
     }
-    return screenMatrix.indexOf(
-        size
-            .getPropertyValue("content")
-            .replace(/"/g, "")
-            .replace(/'/g, "")
-    );
+    return screenMatrix.indexOf(size.getPropertyValue("content").replace(/"/g, "").replace(/'/g, ""));
 }
 
 /* Removes the IE9 video shim (conditional comment) */
@@ -210,13 +198,8 @@ function showImage(picture, screenSize) {
     }
     // remove stopPropagation from fallback image
     picture.image.removeEventListener("load", stopPropagation);
-    if (
-        picture.image.type === undefined ||
-        picture.image.type !== screenMatrix[screenSize]
-    ) {
-        var source = picture.querySelector(
-            "source." + screenMatrix[screenSize]
-        );
+    if (picture.image.type === undefined || picture.image.type !== screenMatrix[screenSize]) {
+        var source = picture.querySelector("source." + screenMatrix[screenSize]);
         if (source) {
             loadImage(picture, source);
         } else {
@@ -234,7 +217,7 @@ function stopPropagation(e) {
 }
 
 function loadImage(picture, source) {
-    global.animationFrame.addOnce(function() {
+    window.animationFrame.addOnce(function() {
         setSource(picture, source);
     });
     picture.image.type = source.className;
@@ -263,15 +246,13 @@ function getCandidates(srcset) {
         var candidateArr = candidate.split(/\s+/);
         var sizeDescriptor = candidateArr[1];
         var resolution;
-        if (
-            sizeDescriptor &&
-            (sizeDescriptor.slice(-1) === "w" ||
-                sizeDescriptor.slice(-1) === "x")
-        ) {
+        if (sizeDescriptor && (sizeDescriptor.slice(-1) === "w" || sizeDescriptor.slice(-1) === "x")) {
             sizeDescriptor = sizeDescriptor.slice(0, -1);
         }
 
-        resolution = sizeDescriptor ? parseFloat(sizeDescriptor, 10) : 1;
+        resolution = sizeDescriptor
+            ? parseFloat(sizeDescriptor, 10)
+            : 1;
 
         var formattedCandidate = {
             url: candidateArr[0],
@@ -290,10 +271,7 @@ function getBestCandidate(candidates) {
         bestCandidate = candidates[0];
     for (var l = 1; l < candidates.length; l++) {
         candidate = candidates[l];
-        if (
-            candidate.resolution >= Math.round(devicePixelRatio) &&
-            candidate.resolution <= bestCandidate.resolution
-        ) {
+        if (candidate.resolution >= Math.round(devicePixelRatio) && candidate.resolution <= bestCandidate.resolution) {
             bestCandidate = candidate;
         } else {
             break;
